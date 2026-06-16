@@ -1,0 +1,79 @@
+# ReserveIQ — Local Development Stack
+# ---------------------------------------------------------------------------
+# Services:
+#   postgres  — PostgreSQL 16 (persistent volume)
+#   redis     — Redis 7 (persistent volume)
+#   app       — Next.js app with hot-reload via bind mount
+#
+# Usage:
+#   docker compose up --build
+#   docker compose -f docker-compose.yml up -d
+# ---------------------------------------------------------------------------
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: reserveiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: reserveiq
+      POSTGRES_PASSWORD: reserveiq_dev
+      POSTGRES_DB: reserveiq
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reserveiq -d reserveiq"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: reserveiq-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: reserveiq-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://reserveiq:reserveiq_dev@postgres:5432/reserveiq
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_SECRET: local-dev-secret-change-in-production
+      NEXTAUTH_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:

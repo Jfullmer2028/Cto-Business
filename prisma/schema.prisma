@@ -1,0 +1,18 @@
+// ReserveIQ — Prisma schema
+// Teammates: extend this file with actual entities (User, CloudAccount,
+// CostReport, ExecutionPlan, etc.).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Example {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
