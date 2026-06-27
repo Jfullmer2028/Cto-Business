@@ -17,13 +17,13 @@ VALUES
   ('ca_globex_2', 'org_globex', 'GCP', 'globex-gcp-001', 'Globex GCP', 'us-central1', 'ACTIVE', NOW(), NOW()),
   ('ca_initech_1', 'org_initech', 'AWS', '555555555555', 'Initech Main', 'us-east-2', 'ACTIVE', NOW(), NOW());
 
--- Usage Metrics (30 days of synthetic data)
-DO $$
+-- Usage Metrics (90 days of synthetic data)
+DO $
 DECLARE
   i INT;
   metric_date TIMESTAMP;
 BEGIN
-  FOR i IN 0..29 LOOP
+  FOR i IN 0..89 LOOP
     metric_date := DATE_TRUNC('day', NOW() - INTERVAL '1 day' * i);
 
     -- Acme Production EC2
