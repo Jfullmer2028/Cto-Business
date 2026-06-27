@@ -100,7 +100,7 @@ async function main() {
 
   const allAccounts = [...acme.cloudAccounts, ...globex.cloudAccounts, ...initech.cloudAccounts];
 
-  // Seed UsageMetrics for the last 30 days
+  // Seed UsageMetrics for the last 90 days
   const now = new Date();
   const metricsData: {
     organizationId: string;
@@ -124,7 +124,7 @@ async function main() {
         ? globex.id
         : initech.id;
 
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 90; i++) {
       const date = new Date(now);
       date.setDate(date.getDate() - i);
       date.setHours(0, 0, 0, 0);
