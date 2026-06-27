@@ -1,7 +1,3 @@
-// ReserveIQ — Prisma schema
-// Teammates: extend this file with actual entities (User, CloudAccount,
-// CostReport, ExecutionPlan, etc.).
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,8 +7,273 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Example {
+// Enums
+enum SubscriptionPlan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum CloudProvider {
+  AWS
+  AZURE
+  GCP
+}
+
+enum AccountStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  ERROR
+}
+
+enum ServiceType {
+  EC2
+  RDS
+  ELASTICACHE
+  COMPUTE
+  SQL
+  COSMOS
+  BIGQUERY
+  GCE
+}
+
+enum Granularity {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum ReservationType {
+  STANDARD
+  CONVERTIBLE
+  NEGOTIATED
+}
+
+enum TermLength {
+  ONE_YEAR
+  THREE_YEAR
+  FIVE_YEAR
+}
+
+enum OfferingClass {
+  STANDARD
+  CONVERTIBLE
+}
+
+enum RecommendationType {
+  PURCHASE
+  MODIFY
+  EXCHANGE
+  SELL
+}
+
+enum RecommendationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTED
+}
+
+enum ExecutionStatus {
+  DRAFT
+  PENDING_APPROVAL
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionStatus {
+  SUCCESS
+  FAILED
+  ROLLBACK
+  PENDING
+}
+
+// Models
+model Organization {
   id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  name      String
+  slug      String   @unique
+  plan      SubscriptionPlan @default(STARTER)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  cloudAccounts       CloudAccount[]
+  usageMetrics        UsageMetric[]
+  reservationPortfolios ReservationPortfolio[]
+  recommendations     Recommendation[]
+  executionPlans      ExecutionPlan[]
+  transactionLogs     TransactionLog[]
+
+  @@index([slug])
+  @@index([plan])
+  @@map("organizations")
+}
+
+model CloudAccount {
+  id            String        @id @default(cuid())
+  organizationId String       @map("organization_id")
+  provider      CloudProvider
+  accountId     String        @map("account_id")
+  accountName   String?       @map("account_name")
+  region        String?
+  credentials   String?       // encrypted JSON blob
+  status        AccountStatus @default(PENDING)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  organization        Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  usageMetrics        UsageMetric[]
+  reservationPortfolios ReservationPortfolio[]
+
+  @@unique([organizationId, provider, accountId])
+  @@index([organizationId, status])
+  @@index([provider])
+  @@map("cloud_accounts")
+}
+
+model UsageMetric {
+  id              String      @id @default(cuid())
+  organizationId  String      @map("organization_id")
+  cloudAccountId  String      @map("cloud_account_id")
+  serviceType     ServiceType @map("service_type")
+  resourceType    String      @map("resource_type")
+  usageAmount     Decimal     @map("usage_amount")
+  unit            String
+  cost            Decimal
+  currency        String      @default("USD")
+  timestamp       DateTime
+  granularity     Granularity @default(DAILY)
+  tags            Json?       // provider-specific tags
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cloudAccount CloudAccount @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, timestamp])
+  @@index([cloudAccountId, timestamp])
+  @@index([serviceType, resourceType])
+  @@index([timestamp])
+  @@map("usage_metrics")
+}
+
+model ReservationPortfolio {
+  id                String          @id @default(cuid())
+  organizationId    String          @map("organization_id")
+  cloudAccountId    String          @map("cloud_account_id")
+  reservationType   ReservationType @map("reservation_type")
+  term              TermLength
+  offeringClass     OfferingClass   @map("offering_class")
+  instanceFamily    String          @map("instance_family")
+  instanceType      String          @map("instance_type")
+  region            String
+  quantity          Int
+  startDate         DateTime        @map("start_date")
+  endDate           DateTime        @map("end_date")
+  hourlyPrice       Decimal         @map("hourly_price")
+  upfrontCost       Decimal         @map("upfront_cost")
+  totalValue        Decimal         @map("total_value")
+  utilizationRate   Decimal?        @map("utilization_rate")
+  status            AccountStatus   @default(ACTIVE)
+  providerDetails   Json?           @map("provider_details")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cloudAccount CloudAccount @relation(fields: [cloudAccountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([cloudAccountId, endDate])
+  @@index([instanceFamily, region])
+  @@index([endDate])
+  @@map("reservation_portfolios")
+}
+
+model Recommendation {
+  id                   String               @id @default(cuid())
+  organizationId       String               @map("organization_id")
+  cloudAccountId       String?              @map("cloud_account_id")
+  type                 RecommendationType
+  action               String               // e.g., "purchase_r5_large_1y"
+  resourceType         String               @map("resource_type")
+  instanceFamily       String?              @map("instance_family")
+  region               String?
+  recommendedQuantity  Int                  @map("recommended_quantity")
+  expectedSavings      Decimal              @map("expected_savings")
+  expectedUtilization  Decimal?             @map("expected_utilization")
+  confidenceScore      Decimal              @map("confidence_score")
+  roiScore             Decimal?             @map("roi_score")
+  status               RecommendationStatus @default(PENDING)
+  validUntil           DateTime             @map("valid_until")
+  reason               String?              // human-readable explanation
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  // Relations
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  executionPlans ExecutionPlan[]
+
+  @@index([organizationId, status])
+  @@index([status, validUntil])
+  @@index([cloudAccountId])
+  @@index([type])
+  @@map("recommendations")
+}
+
+model ExecutionPlan {
+  id               String          @id @default(cuid())
+  organizationId   String          @map("organization_id")
+  recommendationId String?         @map("recommendation_id")
+  status           ExecutionStatus @default(DRAFT)
+  scheduledAt      DateTime?       @map("scheduled_at")
+  executedAt       DateTime?       @map("executed_at")
+  executedBy       String?         @map("executed_by")
+  details          Json?           // execution payload
+  approvalNotes    String?         @map("approval_notes")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  // Relations
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recommendation  Recommendation? @relation(fields: [recommendationId], references: [id], onDelete: SetNull)
+  transactionLogs TransactionLog[]
+
+  @@index([organizationId, status])
+  @@index([status, scheduledAt])
+  @@index([recommendationId])
+  @@map("execution_plans")
+}
+
+model TransactionLog {
+  id               String          @id @default(cuid())
+  organizationId   String          @map("organization_id")
+  executionPlanId  String?         @map("execution_plan_id")
+  action           String          // e.g., "purchase", "modify", "exchange"
+  resourceType     String          @map("resource_type")
+  quantity         Int
+  provider         CloudProvider
+  region           String?
+  status           TransactionStatus
+  message          String?         // error or success message
+  metadata         Json?           // provider response, transaction IDs, etc.
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  executionPlan  ExecutionPlan? @relation(fields: [executionPlanId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([executionPlanId])
+  @@index([status])
+  @@index([provider])
+  @@map("transaction_logs")
 }

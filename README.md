@@ -1,137 +1,87 @@
 # ReserveIQ
 
-Predictive automation platform for multi-cloud FinOps. Eliminates manual reserved-instance (RI) management by ingesting cost and usage data from AWS, Azure, and GCP, forecasting demand, identifying coverage gaps, and generating ranked purchase plans.
+Predictive automation platform for multi-cloud FinOps.
 
-## Local Development Setup
+## Prerequisites
 
-### Prerequisites
+- Node.js 18+
+- Docker & Docker Compose
 
-- [Docker](https://docs.docker.com/get-docker/) & Docker Compose
-- [Node.js](https://nodejs.org/) 20+ (for running outside containers)
-- [Git](https://git-scm.com/)
+## Getting Started
 
-### Quick Start (Docker)
-
-The fastest way to get the entire stack running locally is with Docker Compose:
+### 1. Install dependencies
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd reserveiq
-
-# Start PostgreSQL, Redis, and the Next.js app
-docker compose up --build
+npm install
 ```
 
-The application will be available at [http://localhost:3000](http://localhost:3000).
-
-Services started:
-
-| Service    | Host Port | Description                     |
-| ---------- | --------- | ------------------------------- |
-| App        | 3000      | Next.js application (dev mode)  |
-| PostgreSQL | 5432      | Primary database                |
-| Redis      | 6379      | Cache & BullMQ job queue        |
-
-### Environment Variables
-
-Create a `.env.local` file in the project root (it is ignored by Git):
-
-```env
-# Database
-DATABASE_URL=postgresql://reserveiq:reserveiq_dev@localhost:5432/reserveiq
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# Auth
-NEXTAUTH_SECRET=change-me-in-production
-NEXTAUTH_URL=http://localhost:3000
-```
-
-When running inside Docker Compose, these values are injected automatically via `docker-compose.yml`.
-
-### Running Locally (without Docker)
-
-If you prefer to run services directly on your machine:
-
-1. **Start PostgreSQL & Redis**
-
-   You can use the Docker Compose file to spin up only the infrastructure services:
-
-   ```bash
-   docker compose up postgres redis -d
-   ```
-
-2. **Install dependencies**
-
-   ```bash
-   npm install
-   ```
-
-3. **Set up the database**
-
-   ```bash
-   npx prisma migrate dev
-   npx prisma generate
-   ```
-
-4. **Run the development server**
-
-   ```bash
-   npm run dev
-   ```
-
-### Useful Commands
-
-| Command                                | Description                                    |
-| -------------------------------------- | ---------------------------------------------- |
-| `docker compose up --build`            | Build images and start all services            |
-| `docker compose up -d`                 | Start all services in detached mode            |
-| `docker compose down`                  | Stop and remove containers                     |
-| `docker compose down -v`               | Stop containers **and** delete volumes (data)  |
-| `docker compose logs -f app`           | Tail application logs                          |
-| `docker compose exec app sh`           | Open a shell inside the running app container  |
-| `docker compose exec postgres psql -U reserveiq` | Open PostgreSQL CLI                    |
-| `docker compose exec redis redis-cli`  | Open Redis CLI                                 |
-
-### Health Checks
-
-All services expose health checks:
-
-- **App**: `GET http://localhost:3000/api/health`
-- **PostgreSQL**: `pg_isready`
-- **Redis**: `redis-cli ping`
-
-### Production Build
-
-To verify the production Docker image locally:
+### 2. Start local PostgreSQL
 
 ```bash
-docker build --target runner -t reserveiq:local .
-docker run -p 3000:3000 --env-file .env reserveiq:local
+docker compose up -d
 ```
 
-> **Note:** Ensure `next.config.js` contains `output: 'standalone'` so the production stage can copy the minimal server bundle.
+### 3. Set up Prisma
 
----
+Generate the Prisma Client:
 
-## Project Structure
-
-```
-.
-├── .github/workflows/ci.yml   # GitHub Actions CI pipeline
-├── Dockerfile                 # Multi-stage Docker build
-├── docker-compose.yml         # Local development stack
-├── prisma/                    # Database schema & migrations
-├── src/
-│   ├── app/                   # Next.js App Router
-│   ├── components/            # React components
-│   ├── lib/                   # Utilities, Prisma client, queue workers
-│   └── server/                # API routes, services, forecasting engine
-└── README.md
+```bash
+npm run db:generate
 ```
 
-## License
+Run the initial migration:
 
-Proprietary — ReserveIQ, Inc.
+```bash
+npm run db:migrate
+```
+
+This will create all tables and apply the schema defined in `prisma/schema.prisma`.
+
+### 4. Seed the database
+
+```bash
+npm run db:seed
+```
+
+This creates 3 synthetic organizations with cloud accounts, 30 days of usage metrics, reservation portfolios, recommendations, and execution plans.
+
+### 5. Start the Next.js dev server
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) to view the app.
+
+### 6. Explore the database (optional)
+
+```bash
+npm run db:studio
+```
+
+Opens Prisma Studio at [http://localhost:5555](http://localhost:5555).
+
+## Database Schema
+
+The Prisma schema models the core ReserveIQ domain:
+
+| Model | Purpose |
+|-------|---------|
+| `Organization` | Customer tenants with subscription plans |
+| `CloudAccount` | Linked AWS, Azure, and GCP accounts |
+| `UsageMetric` | Daily cost and usage telemetry |
+| `ReservationPortfolio` | Active and pending RIs / CUDs |
+| `Recommendation` | ML-generated purchase/modify/exchange suggestions |
+| `ExecutionPlan` | Ranked, approvable action plans |
+| `TransactionLog` | Idempotent audit trail of every executed action |
+
+## Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Next.js development server |
+| `npm run build` | Build for production |
+| `npm run db:migrate` | Run Prisma migrations |
+| `npm run db:seed` | Seed synthetic data |
+| `npm run db:generate` | Regenerate Prisma Client |
+| `npm run db:studio` | Open Prisma Studio |
